@@ -4,23 +4,23 @@ using DataFrames, Lasso, Graphs
 export graphlasso
 
 function graphlasso(S::Matrix{Float64}, α::Float64; tol::Float64=1e-5,
-    maxit::Int=1000, penalize_diag::Bool=true, verbose::Bool=false)
+                    maxit::Int=1000, penalize_diag::Bool=true, verbose::Bool=false)
     p = size(S,1)
     adj = abs(S) .> α
-    blocks = connected_components(sparse2adjacencylist(sparse(adj*1.0)))
+    blocks = connected_components(sparse2adjacencylist(sparse(max(adj, eye(p)))))
     if(verbose)
         print(blocks)
     end
     W = zeros(p,p)
-    W_old = copy(W)
     Θ = zeros(p,p)
-    for k = 1:length(blocks)
-        W[blocks[k],blocks[k]], Θ[blocks[k],blocks[k]] = fit_block(S[blocks[k],blocks[k]], α, tol, maxit, penalize_diag)
+    for block = blocks
+        W[block,block], Θ[block,block] = fit_block(S[block,block], α, tol, maxit, penalize_diag)
     end
-    return W, Θ 
+    return W, Θ
 end
 
-function fit_block(S::Matrix{Float64}, α::Float64, tol::Float64, maxit::Int, penalize_diag::Bool)
+function fit_block(S::Matrix{Float64}, α::Float64, tol::Float64,
+                   maxit::Int, penalize_diag::Bool)
     p = size(S,1)
     W = copy(S)
     if penalize_diag
@@ -40,8 +40,8 @@ function fit_block(S::Matrix{Float64}, α::Float64, tol::Float64, maxit::Int, pe
             splice!(inds, j)
             W11 = W[inds,inds]
             sqrtW11 = sqrtm(W11)
-            β[:,j] = fit(LassoPath, sqrtW11, sqrtW11 \ S[inds,j], λ=[α/(p-1)], 
-                            standardize=false, intercept=false).coefs
+            β[:,j] = fit(LassoPath, sqrtW11, sqrtW11 \ S[inds,j], λ=[α/(p-1)],
+                         standardize=false, intercept=false).coefs
             W[inds,j] = W11 * β[:,j]
             W[j,inds] = W[inds,j]
         end
