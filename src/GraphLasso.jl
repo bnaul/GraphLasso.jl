@@ -4,11 +4,13 @@ using DataFrames, Lasso, Graphs
 export graphlasso
 
 function graphlasso(S::Matrix{Float64}, α::Float64; tol::Float64=1e-5,
-    maxit::Int=1000, penalize_diag::Bool=true)
+    maxit::Int=1000, penalize_diag::Bool=true, verbose::Bool=false)
     p = size(S,1)
     adj = abs(S) .> α
     blocks = connected_components(sparse2adjacencylist(sparse(adj*1.0)))
-    print(blocks)
+    if(verbose)
+        print(blocks)
+    end
     W = zeros(p,p)
     W_old = copy(W)
     Θ = zeros(p,p)
