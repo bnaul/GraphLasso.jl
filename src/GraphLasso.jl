@@ -1,4 +1,5 @@
 module GraphLasso
+using LinearAlgebra, SparseArrays
 using DataFrames, Lasso, Graphs
 
 export graphlasso
@@ -6,8 +7,8 @@ export graphlasso
 function graphlasso(S::Matrix{Float64}, α::Float64; tol::Float64=1e-5,
                     maxit::Int=1000, penalize_diag::Bool=true, verbose::Bool=false)
     p = size(S,1)
-    adj = abs(S) .> α
-    blocks = connected_components(sparse2adjacencylist(sparse(max(adj, eye(p)))))
+    adj = convert(SparseMatrixCSC{Int64,Int64}, abs.(S) .> α)
+    blocks = connected_components(sparse2adjacencylist2(max.(adj, sparse(I, p, p))))
     if(verbose)
         print(blocks)
     end
@@ -24,7 +25,7 @@ function fit_block(S::Matrix{Float64}, α::Float64, tol::Float64,
     p = size(S,1)
     W = copy(S)
     if penalize_diag
-        W += α * eye(p)
+        W += α*I
     end
     if size(S,1) == 1
         return W, inv(W)
@@ -39,7 +40,7 @@ function fit_block(S::Matrix{Float64}, α::Float64, tol::Float64,
             inds = collect(1:p)
             splice!(inds, j)
             W11 = W[inds,inds]
-            sqrtW11 = sqrtm(W11)
+            sqrtW11 = sqrt(W11)
             β[:,j] = fit(LassoPath, sqrtW11, sqrtW11 \ S[inds,j], λ=[α/(p-1)],
                          standardize=false, intercept=false).coefs
             W[inds,j] = W11 * β[:,j]
@@ -61,4 +62,30 @@ function fit_block(S::Matrix{Float64}, α::Float64, tol::Float64,
     end
     return W, Θ
 end
+
+# Modify code from unmaintained Graph.jl
+function sparse2adjacencylist2(A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti<:Integer}
+    colptr = A.colptr
+    rowval = A.rowval
+    n = size(A, 1)
+    adjlist = Array{Array{Ti,1}}(undef, n)
+    s = 0
+    for j in 1:n
+        adjj = Ti[]
+        sizehint!(adjj, colptr[j+1] - colptr[j] - 1)
+        for k in colptr[j]:(colptr[j+1] - 1)
+            rvk = A.rowval[k]
+            if rvk != j push!(adjj, rvk) end
+        end
+        s += length(adjj)
+        adjlist[j] = adjj
+    end
+    GenericAdjacencyList{Ti, UnitRange{Ti}, Vector{Vector{Ti}}}(!ishermitian(A),
+                                                             one(Ti):convert(Ti,n),
+                                                             s, adjlist)
 end
+
+
+
+end
+
